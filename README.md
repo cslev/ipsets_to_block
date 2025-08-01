@@ -73,15 +73,17 @@ sudo nano /etc/ufw/before.rules
 ```
 Scroll to the bottom, before the `COMMIT`, and add these lines
 ```
-# Drop all packets from ipset "spamhaus_drop"
+# Drop all packets from ipset "spamhaus_drop" and add specific LOG tag 
+-A ufw-before-input -m set --match-set spamhaus_drop src -j LOG --log-prefix "UFW-SPAMHAUS-DROP: "
 -A ufw-before-input -m set --match-set spamhaus_drop src -j DROP
 
-# Drop all packets from ipset "sans_dshield"
+# Drop all packets from ipset "sans_dshield" and add specific LOG tag 
+-A ufw-before-input -m set --match-set sans_dshield src -j LOG --log-prefix "UFW-SANS-DROP: "
 -A ufw-before-input -m set --match-set sans_dshield src -j DROP
 
-# Drop all packets from ipset "blocklist_de"
+# Drop all packets from ipset "blocklist_de" and add specific LOG tag 
+-A ufw-before-input -m set --match-set blocklist_de src -j LOG --log-prefix "UFW-BLOCKLISTDE-DROP: "
 -A ufw-before-input -m set --match-set blocklist_de src -j DROP
-
 ```
 
 ## Reload `ufw`
@@ -100,5 +102,30 @@ sudo iptables -L ufw-before-input -v -n
 0     0 DROP       0    --  *      *       0.0.0.0/0            0.0.0.0/0            match-set blocklist_de src
 ```
 You should see the drop rules defined on the `ipsets`. 
+
+# Where to Find the Logs
+
+The log entries will be sent to your system's logging service. On most systems, you can find them in one of these files:
+```
+/var/log/ufw.log
+/var/log/syslog
+/var/log/kern.log
+```
+
+You can use grep to easily find all log entries from your ipset rules by searching for the prefix you defined:
+Bash
+
+## This will show you all recent logged attempts from the SANS DShield blocklist
+```
+grep "UFW-SANS-DROP" /var/log/ufw.log
+```
+## This is a more general search if you are unsure which file to check
+```
+grep "UFW-SANS-DROP" /var/log/*
+```
+A sample log entry will look something like this:
+```
+[UFW-SANS-DROP: IN=eth0 OUT= MAC=... SRC=198.51.100.25 DST=203.0.113.12 LEN=44 TOS=0x00 PREC=0x00 TTL=112 ID=0 DF PROTO=TCP SPT=45423 DPT=22 WINDOW=1024 RES=0x00 SYN URGP=0 ]
+```
 
 All set up, thank me later :P
