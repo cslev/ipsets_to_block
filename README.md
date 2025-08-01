@@ -39,6 +39,32 @@ sudo ./update_blocklist_de.sh [-i IPSET_NAME] [-u BLOCKLIST_DE_URL]
         -u <BLOCKLIST_DE_URL>: Blocklist.de list URL (Default: http://lists.blocklist.de/lists/all.txt).
 ```
 
+# Example output
+```
+./update_spamhaus_drop.sh 
+No arguments were provided, falling back to defaults...
+--- Fri 01 Aug 2025 08:56:58 AM +08 ---
+Checking for 'ipset' command...                                                                                                [FOUND]
+Checking for 'curl' command...                                                                                                 [FOUND]
+Using the following variables:
+ IPSET_NAME: spamhaus_drop
+ SPAMHAUS_URL: https://www.spamhaus.org/drop/drop.txt
+--- Fri 01 Aug 2025 08:56:58 AM +08 ---
+Starting update for ipset 'spamhaus_drop' from 'https://www.spamhaus.org/drop/drop.txt'...
+Ipset set 'spamhaus_drop' already exists. Proceeding with update.
+Downloading and filtering threat intelligence list...                                                                          [DONE]
+Creating temporary ipset set for atomic swap...                                                                                [DONE]
+Adding IP addresses to the temporary set...
+Adding 1,577 of 1,577 addresses...
+[DONE]
+Added entries to temporary set.
+Swapping new set with active set...                                                                                            [DONE]
+Destroying old (temporary) set...
+Spamhaus DROP list update finished for ipset 'spamhaus_drop'.
+--- End Fri 01 Aug 2025 08:57:12 AM +08 ---
+
+```
+
 # Check your ipsets:
 ```
 sudo ipset list
