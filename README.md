@@ -88,7 +88,7 @@ After=network-online.target
 
 [Service]
 Type=oneshot
-ExecStart=/sbin/ipset restore -exist < /etc/ufw/rules.v4.ipsets
+ExecStart=/sbin/ipset restore -exist --file /etc/ufw/rules.v4.ipsets
 ExecStop=/sbin/ipset save -file /etc/ufw/rules.v4.ipsets
 
 [Install]
