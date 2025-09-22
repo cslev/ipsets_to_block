@@ -65,6 +65,47 @@ Spamhaus DROP list update finished for ipset 'spamhaus_drop'.
 
 ```
 
+# Make them permanent
+This is a necessary step, otherwise after reboot the lists are not available for `ufw` to load, and then the whole `ufw` firewall stuck.
+
+## Save current list
+Let's save the ipset to a file
+```
+# ipset save -file /etc/ufw/rules.v4.ipsets
+```
+
+## Service to (re)store
+Create a systemd service
+```
+# nano /etc/systemd/system/restore-ipset.service
+```
+Copy-paste the following into it (modify the path at will)
+```
+[Unit]
+Description=Restore IPsets for Firewall
+Before=ufw.service
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/sbin/ipset restore -exist < /etc/ufw/rules.v4.ipsets
+ExecStop=/sbin/ipset save -file /etc/ufw/rules.v4.ipsets
+
+[Install]
+WantedBy=multi-user.target
+```
+As you can see, the important part is `ExecStart`, which restores the ipsets from the file we created above. It also stores it when the service stop is being called to have the latest set in the memory to be stored.
+The second important setting is the `Before` part that tells `systemd` to call this before `ufw` starts, so they will be readily available for `ufw`.
+
+### Why not this script at startup
+It would be a simple solution to make a service out of these scripts instead of the store-and-restore, but the lists can be huge and would take a lot of time everytime our system boots. Better to let the `crontab` update the list at 3 am everyday, and any time we reboot, we just restore quickly the latest set.
+
+## Enable service
+```
+systemctl enable restore-ipset.service
+```
+
+
 # Check your ipsets:
 ```
 sudo ipset list
