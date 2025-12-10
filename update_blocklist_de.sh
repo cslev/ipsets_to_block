@@ -8,7 +8,7 @@ source "$ROOT/sources/extra.sh"
 # Default values for ipset name and threat intelligence URL
 # These can be overridden by command-line arguments.
 DEFAULT_IPSET_NAME="blocklist_de"
-DEFAULT_BLOCKLIST_DE_URL="http://lists.blocklist.de/lists/all.txt"
+DEFAULT_BLOCKLIST_DE_URL="https://lists.blocklist.de/lists/all.txt"
 # --- End Configuration ---
 
 # Variables that will hold the final (default or overridden) values
