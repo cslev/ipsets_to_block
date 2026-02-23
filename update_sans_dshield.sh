@@ -146,7 +146,7 @@ echo ""
 # Check success of the adding process - any actual failures would be logged by ipset,
 # but the loop itself finishing is a 'success' for the process of attempting to add.
 
-c_print "Cyan" "Added $ADD_COUNT entries to temporary set." no_newline
+c_print "Cyan" "Added $ADD_COUNT_SUCCESS of $ADD_COUNT_PROCESSED entries to temporary set ($(( ADD_COUNT_PROCESSED - ADD_COUNT_SUCCESS )) duplicates/invalid skipped)." no_newline
 check_retval 0 # Assuming loop execution is a success, individual add failures are minor
 
 # Swap the new set with the active one atomically
@@ -169,7 +169,12 @@ fi
 # rm "$TEMP_FILE"
 # check_retval "$?" # Pass actual exit status
 
-c_print "Green" "SANS ISC DShield list update finished for ipset '$IPSET_NAME'." # Updated final message
+c_print "Green" "SANS ISC DShield list update finished for ipset '$IPSET_NAME'."
+
+# Print summary of the active ipset
+c_print "Bold" "--- Ipset summary for '$IPSET_NAME' ---"
+sudo ipset list "$IPSET_NAME" -t
+
 c_print "Bold" "--- End $(date) ---"
 
 # Exit with success code
