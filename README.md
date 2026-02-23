@@ -6,7 +6,26 @@ Current scripts create an `ipset` for the following publicly available IPs:
  - SANS ISC
  - blocklist.de
 
-After getting the lists and parsing them, `ipset` is created for each, which can be applied in your firewall, e.g., `iptables`, `ufw`.
+After getting the lists and parsing them, an `ipset` is created and kept up to date for each source.
+
+> [!WARNING]
+> **These scripts only manage the `ipset` lists — they do NOT protect your system by themselves.**
+> Simply running the scripts does not block any traffic. To be protected, you must manually add the ipsets to your firewall (`ufw`, `iptables`, etc.).
+> See the **[Add `ipset` to `ufw`](#add-ipset-to-ufw)** section at the bottom of this file for step-by-step instructions. This is a one-time manual setup.
+
+# Bootstrap — Install Dependencies
+Before running any update scripts, make sure the required dependencies (`curl` and `ipset`) are installed. A bootstrap script is provided to handle this automatically on Debian-based systems.
+
+```bash
+sudo ./bootstrap.sh
+```
+
+This will:
+1. Verify the system uses `apt`
+2. Run `apt update`
+3. Install `curl` and `ipset`
+
+---
 
 # Use
 All scripts below must be run separately/sequentially, and no arguments are needed to be specified. They will all make a relevant `ipset` for each list, which later you can add to `ufw`.
@@ -64,6 +83,35 @@ Spamhaus DROP list update finished for ipset 'spamhaus_drop'.
 --- End Fri 01 Aug 2025 08:57:12 AM +08 ---
 
 ```
+
+# Automate with Cron
+To keep the ipsets updated daily without manual intervention, use the provided `setup_cron.sh` script. It registers all three update scripts into `/etc/crontab`, staggered to avoid simultaneous load.
+
+```bash
+sudo ./setup_cron.sh
+```
+
+This will add the following jobs to `/etc/crontab`:
+
+```
+0  2 * * * root /path/to/update_blocklist_de.sh    # 02:00 daily
+15 2 * * * root /path/to/update_sans_dshield.sh   # 02:15 daily
+30 2 * * * root /path/to/update_spamhaus_drop.sh  # 02:30 daily
+```
+
+The script is **idempotent** — running it multiple times will not create duplicate entries.
+
+To verify the installed jobs:
+```bash
+grep -E "update_blocklist_de|update_sans_dshield|update_spamhaus_drop" /etc/crontab
+```
+
+To remove them, edit `/etc/crontab` directly:
+```bash
+sudo nano /etc/crontab
+```
+
+---
 
 # Make them permanent
 This is a necessary step, otherwise after reboot the lists are not available for `ufw` to load, and then the whole `ufw` firewall stuck.
@@ -172,25 +220,59 @@ You should see the drop rules defined on the `ipsets`.
 
 # Where to Find the Logs
 
-The log entries will be sent to your system's logging service. On most systems, you can find them in one of these files:
-```
-/var/log/ufw.log
-/var/log/syslog
-/var/log/kern.log
+## Step 1 — Enable UFW logging
+
+UFW logging is **disabled by default**. Without it, no blocked packets will be recorded. Enable it first:
+```bash
+sudo ufw logging on
+sudo ufw status verbose | grep Logging   # verify it's on
 ```
 
-You can use grep to easily find all log entries from your ipset rules by searching for the prefix you defined:
-Bash
+## Step 2 — Check where logs go
 
-## This will show you all recent logged attempts from the SANS DShield blocklist
+Modern Debian/Ubuntu systems often ship **without `rsyslog`**, meaning there are no flat log files like `/var/log/ufw.log` or `/var/log/syslog`. Logs go to `systemd-journald` instead.
+
+Check whether `rsyslog` is installed:
+```bash
+systemctl status rsyslog
 ```
+
+### If rsyslog is NOT installed (journald only)
+Read logs directly from the journal:
+```bash
+# All UFW ipset drops, today
+sudo journalctl -k --since today | grep "UFW-"
+
+# Filter by a specific blocklist
+sudo journalctl -k --since today | grep "UFW-SANS-DROP"
+sudo journalctl -k --since today | grep "UFW-SPAMHAUS-DROP"
+sudo journalctl -k --since today | grep "UFW-BLOCKLISTDE-DROP"
+
+# Follow live (like tail -f)
+sudo journalctl -k -f | grep "UFW-"
+```
+
+Optionally install rsyslog to get flat log files back:
+```bash
+sudo apt install rsyslog
+```
+
+### If rsyslog IS installed (flat log files)
+```bash
 grep "UFW-SANS-DROP" /var/log/ufw.log
+grep "UFW-SANS-DROP" /var/log/syslog
+grep "UFW-" /var/log/kern.log
 ```
-## This is a more general search if you are unsure which file to check
+
+## Step 3 — Verify rules are actually matching traffic
+
+If you see no log entries at all, check whether the iptables rules are loaded and if packet counters are incrementing:
+```bash
+sudo iptables -L ufw-before-input -v -n | grep -E "spamhaus|sans|blocklist"
 ```
-grep "UFW-SANS-DROP" /var/log/*
-```
-A sample log entry will look something like this:
+The first two columns are packet and byte counts. If they're all `0     0`, no traffic has matched any blocked IP yet — that's normal if your server hasn't been probed by a listed address.
+
+## Sample log entry
 ```
 [UFW-SANS-DROP: IN=eth0 OUT= MAC=... SRC=198.51.100.25 DST=203.0.113.12 LEN=44 TOS=0x00 PREC=0x00 TTL=112 ID=0 DF PROTO=TCP SPT=45423 DPT=22 WINDOW=1024 RES=0x00 SYN URGP=0 ]
 ```
