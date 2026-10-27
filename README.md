@@ -114,45 +114,51 @@ sudo nano /etc/crontab
 ---
 
 # Make them permanent
-This is a necessary step, otherwise after reboot the lists are not available for `ufw` to load, and then the whole `ufw` firewall stuck.
+This is a necessary step. `ipset`s live in kernel memory only, so after a reboot they are gone, and `ufw` refuses to load `before.rules` if a referenced set is missing — leaving you with **no firewall at all**.
 
-## Save current list
-Let's save the ipset to a file
-```
-# ipset save -file /etc/ufw/rules.v4.ipsets
+```bash
+sudo ./setup_persistence.sh
 ```
 
-## Service to (re)store
-Create a systemd service
-```
-# nano /etc/systemd/system/restore-ipset.service
-```
-Copy-paste the following into it (modify the path at will)
-```
-[Unit]
-Description=Restore IPsets for Firewall
-Before=ufw.service
-After=network-online.target
+This will:
+1. Install [`ipset_persist.sh`](ipset_persist.sh) to `/usr/local/sbin/` (so booting does not depend on where this repo lives)
+2. Install and enable `ipsets-to-block.service`, which restores the sets at boot **right before `ufw` starts**
+3. Save the currently loaded sets to `/var/lib/ipsets_to_block/<IPSET_NAME>.save`
 
-[Service]
-Type=oneshot
-ExecStart=/sbin/ipset restore -exist --file /etc/ufw/rules.v4.ipsets
-ExecStop=/sbin/ipset save -file /etc/ufw/rules.v4.ipsets
+After that, every update script saves its fresh set to `/var/lib/ipsets_to_block/` at the end of each run, so a reboot always restores the latest lists from the last cron run.
 
-[Install]
-WantedBy=multi-user.target
-```
-As you can see, the important part is `ExecStart`, which restores the ipsets from the file we created above. It also stores it when the service stop is being called to have the latest set in the memory to be stored.
-The second important setting is the `Before` part that tells `systemd` to call this before `ufw` starts, so they will be readily available for `ufw`.
+The script is **idempotent** — re-run it after pulling a new version of this repo to refresh the installed copy.
 
-### Why not this script at startup
-It would be a simple solution to make a service out of these scripts instead of the store-and-restore, but the lists can be huge and would take a lot of time everytime our system boots. Better to let the `crontab` update the list at 3 am everyday, and any time we reboot, we just restore quickly the latest set.
-
-## Enable service
-```
-systemctl enable restore-ipset.service
+To verify:
+```bash
+systemctl status ipsets-to-block.service
+ls -l /var/lib/ipsets_to_block/
 ```
 
+### How it works
+- **Where the sets are stored:** `/var/lib/ipsets_to_block/`, one file per set. This is not owned by any package, so neither a `ufw` upgrade/purge, nor `ufw reset`, nor a `git pull`/re-clone of this repo touches it. Override with the `IPSET_SAVE_DIR` environment variable.
+- **When they are saved:** after every successful update (written to a temp file and renamed, so an interrupted save never leaves a truncated file). They are *not* saved at shutdown, so a failed restore can never overwrite good data with empty sets.
+- **When they are restored:** at early boot, ordered exactly like `ufw.service` (`DefaultDependencies=no`, `After=local-fs.target`, `Before=ufw.service network-pre.target`). Sets that already exist are left untouched. If a save file is corrupted, an **empty** set is created instead, so `ufw` still loads all its other rules; the next cron run refills it.
+
+### Restore at boot manually
+```bash
+sudo /usr/local/sbin/ipset_persist.sh restore
+```
+
+### Why not run the update scripts at startup
+It would be a simple solution to make a service out of the update scripts instead of the save-and-restore, but the lists can be huge, need network access (which is not up yet when `ufw` starts), and would take a lot of time every time the system boots. Better to let `crontab` update the lists every night, and any time we reboot, we just quickly restore the latest saved sets.
+
+### Migrating from the old `restore-ipset.service`
+Earlier versions of this README suggested a hand-written `restore-ipset.service` storing everything in `/etc/ufw/rules.v4.ipsets`. That unit did not work reliably:
+- `After=network-online.target` + `Before=ufw.service` is an **ordering cycle**: `ufw.service` runs *before* `network-pre.target`, which is itself before `network-online.target`. systemd breaks the cycle by dropping one of the jobs, so `ufw` often started before the sets existed and failed to load.
+- `Type=oneshot` without `RemainAfterExit=yes` makes systemd run `ExecStop` immediately after `ExecStart`, so the "save on shutdown" just re-saved the sets loaded at boot, and the file never received the updates from cron.
+- The file lived in `/etc/ufw/`, a directory owned by the `ufw` package.
+
+`setup_persistence.sh` disables the old unit automatically. Afterwards, you can remove the leftovers:
+```bash
+sudo rm /etc/systemd/system/restore-ipset.service /etc/ufw/rules.v4.ipsets
+sudo systemctl daemon-reload
+```
 
 # Check your ipsets:
 ```

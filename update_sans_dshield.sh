@@ -164,6 +164,11 @@ if [ "$DESTROY_STATUS" -ne 0 ]; then
 fi
 # No check_retval here, as we explicitly want to *not* exit on this non-fatal warning.
 
+# Persist the fresh set to disk, so ipsets-to-block.service can restore it at boot
+c_print "Bold" "Saving ipset to disk for reboot persistence..." no_newline
+"$ROOT/ipset_persist.sh" save "$IPSET_NAME" >/dev/null
+check_retval "$?" # Pass actual exit status
+
 # Clean up temporary file
 # c_print "Bold" "Cleaning up temporary file..." no_newline
 # rm "$TEMP_FILE"
