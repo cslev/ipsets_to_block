@@ -15,12 +15,6 @@ DEFAULT_SANS_ISC_URL="https://isc.sans.edu/block.txt"
 IPSET_NAME="$DEFAULT_IPSET_NAME"
 SANS_ISC_URL="$DEFAULT_SANS_ISC_URL"
 
-# Define the log file. It's now dynamic based on IPSET_NAME.
-LOG_FILE="/var/log/${IPSET_NAME}_update.log"
-
-# Define a temporary file for downloading the list
-TEMP_FILE="${ROOT}/temp/${IPSET_NAME}_latest.list"
-
 # Function to display help message
 function show_help ()
 {
@@ -55,6 +49,12 @@ do
         ;;
     esac
 done
+
+# Define the log file. It's now dynamic based on IPSET_NAME.
+LOG_FILE="${ROOT}/logs/${IPSET_NAME}_update.log"
+
+# Define a temporary file for downloading the list
+TEMP_FILE="${ROOT}/temp/${IPSET_NAME}_latest.list"
 
 # Shift off the options and their arguments
 shift $((OPTIND-1))
